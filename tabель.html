@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Табель</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --fg: #e0e0e0;
+      --card: #1e1e1e;
+      --border: #333;
+      --accent: #4a90e2;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--fg);
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1, h2 {
+      text-align: center;
+      margin: 16px 0 20px;
+      font-weight: 500;
+      font-size: 1.6rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    th {
+      background: #252525;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+    input {
+      background: #2a2a2a;
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 8px;
+      width: 100%;
+      font-size: 1rem;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    input[type="time"] {
+      -moz-appearance: textfield;
+      -webkit-appearance: none;
+    }
+    .summary {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 24px;
+    }
+    .summary div {
+      text-align: right;
+      font-size: 1.15rem;
+      margin: 8px 0;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .export-btn {
+      background: var(--accent);
+      color: white;
+    }
+    .analytics-btn {
+      background: #5a5a5a;
+      color: white;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    #analytics-page {
+      display: none;
+    }
+    .page {
+      animation: fadeIn 0.4s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .back-btn {
+      background: #444;
+      color: white;
+      width: 100%;
+    }
+
+    /* Подпись */
+    .signature {
+      text-align: right;
+      font-size: 0.95rem;
+      color: #aaa;
+      margin-top: 8px;
+    }
+    .signature input {
+      display: inline-block;
+      width: auto;
+      min-width: 120px;
+      background: transparent;
+      border: none;
+      color: var(--fg);
+      font-size: 0.95rem;
+      padding: 2px 4px;
+    }
+    .signature input:focus {
+      background: #2a2a2a;
+      border-radius: 4px;
+    }
+
+    /* Динамика — заглушка */
+    .analytics-placeholder {
+      text-align: center;
+      padding: 40px 20px;
+      color: #aaa;
+      font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Основная страница: Табель -->
+  <div id="main-page" class="page container">
+    <h1>Табель</h1>
+    <table id="schedule">
+      <thead>
+        <tr>
+          <th>День</th>
+          <th>Дата</th>
+          <th>Начало</th>
+          <th>Окончание</th>
+          <th>Обед (мин)</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="summary">
+      <div>Часов: <span id="hours-total">0</span></div>
+      <div>Заработано: <span id="amount">0</span> ₽</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn export-btn" onclick="exportWeek()">Экспорт</button>
+      <button class="btn analytics-btn" onclick="showAnalytics()">Динамика</button>
+    </div>
+    <div class="signature">
+      Подпись: <input type="text" id="signature-input" placeholder="Ваше имя" maxlength="50">
+    </div>
+  </div>
+
+  <!-- Страница: Динамика -->
+  <div id="analytics-page" class="page container">
+    <h1>Динамика</h1>
+    <div class="analytics-placeholder">
+      Графики сравнения с прошлой неделей<br>
+      и средним за прошлый месяц<br>
+      <strong>готовятся…</strong>
+    </div>
+    <button class="btn back-btn" onclick="showMain()">← Назад</button>
+  </div>
+
+  <script>
+    const RATE = 495; // ₽/час
+    const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+
+    function getMonday(d) {
+      d = new Date(d);
+      const day = d.getDay() || 7;
+      if (day !== 1) d.setDate(d.getDate() - (day - 1));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+
+    function formatDate(date) {
+      return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\./g, '.');
+    }
+
+    function parseTime(str) {
+      if (!str || str === '--:--') return null;
+      const [h, m] = str.split(':').map(Number);
+      if (isNaN(h) || isNaN(m)) return null;
+      return { h, m };
+    }
+
+    // Теперь обед в минутах
+    function getWorkHours(startStr, endStr, breakMinutes) {
+      if (!startStr || !endStr || startStr === '--:--' || endStr === '--:--') return 0;
+      const s = parseTime(startStr);
+      const e = parseTime(endStr);
+      if (!s || !e) return 0;
+      let diff = (e.h * 60 + e.m) - (s.h * 60 + s.m);
+      if (diff <= 0) return 0;
+      const breakNum = parseFloat(breakMinutes) || 0;
+      const workMinutes = diff - breakNum;
+      return Math.max(0, workMinutes / 60);
+    }
+
+    function recalculate() {
+      let totalHours = 0;
+      let totalSum = 0;
+      const rows = document.querySelectorAll('#tbody tr');
+
+      rows.forEach(row => {
+        const start = row.querySelector('.start').value;
+        const end = row.querySelector('.end').value;
+        const brk = row.querySelector('.break').value;
+        const hours = getWorkHours(start, end, brk);
+        totalHours += hours;
+        totalSum += hours * RATE;
+      });
+
+      document.getElementById('hours-total').textContent = totalHours.toFixed(2).replace(/\.00$/, '');
+      document.getElementById('amount').textContent = totalSum.toFixed(2).replace(/\.00$/, '');
+    }
+
+    function renderTable() {
+      const monday = getMonday(new Date());
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        const dayLabel = WEEKDAYS[i];
+        const dateStr = formatDate(date);
+
+        let startVal = '08:00';
+        let endVal = '17:00';
+        let breakVal = '60'; // ← теперь в минутах!
+
+        if (i >= 5) {
+          startVal = endVal = breakVal = '';
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${dayLabel}</td>
+          <td>${dateStr}</td>
+          <td><input type="time" class="start" value="${startVal}" step="900"></td>
+          <td><input type="time" class="end" value="${endVal}" step="900"></td>
+          <td><input type="number" class="break" value="${breakVal}" min="0" max="600" step="5" inputmode="numeric" placeholder="мин"></td>
+        `;
+        tbody.appendChild(row);
+      }
+
+      document.querySelectorAll('.start, .end, .break').forEach(el => {
+        el.addEventListener('input', recalculate);
+      });
+
+      recalculate();
+    }
+
+    // === ЭКСПОРТ ===
+    function exportWeek() {
+      const monday = getMonday(new Date());
+      const mondayStr = formatDate(monday);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      const name = document.getElementById('signature-input').value.trim() || '';
+
+      let totalHours = 0;
+      let totalSum = 0;
+      let tableRows = '';
+
+      document.querySelectorAll('#tbody tr').forEach(row => {
+        const day = row.cells[0].textContent;
+        const date = row.cells[1].textContent;
+        const start = row.querySelector('.start').value || '—';
+        const end = row.querySelector('.end').value || '—';
+        const brk = row.querySelector('.break').value || '0';
+
+        const hours = getWorkHours(start, end, brk);
+        const sum = hours * RATE;
+        totalHours += hours;
+        totalSum += sum;
+
+        tableRows += `
+          <tr>
+            <td>${day}</td>
+            <td>${date}</td>
+            <td>${start}</td>
+            <td>${end}</td>
+            <td>${brk}</td>
+          </tr>
+        `;
+      });
+
+      const exportHtml = `
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+          <meta charset="UTF-8">
+          <title>Табель за неделю ${mondayStr}–${formatDate(sunday)}</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <style>
+            :root {
+              --bg: #121212;
+              --fg: #e0e0e0;
+              --card: #1e1e1e;
+              --border: #333;
+            }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            body {
+              background-color: var(--bg);
+              color: var(--fg);
+              padding: 20px;
+              line-height: 1.6;
+            }
+            .container {
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            h2 {
+              text-align: center;
+              margin: 16px 0 12px;
+              font-weight: 500;
+              font-size: 1.6rem;
+            }
+            .subtitle {
+              text-align: center;
+              color: #aaa;
+              margin-bottom: 16px;
+              font-size: 1.1rem;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              background: var(--card);
+              border-radius: 8px;
+              overflow: hidden;
+              margin-bottom: 20px;
+            }
+            th, td {
+              padding: 10px 12px;
+              text-align: left;
+              border-bottom: 1px solid var(--border);
+              white-space: nowrap;
+            }
+            th {
+              background: #252525;
+              font-weight: 500;
+              font-size: 0.95rem;
+            }
+            .summary {
+              background: var(--card);
+              border-radius: 8px;
+              padding: 12px;
+              margin-bottom: 20px;
+            }
+            .summary div {
+              text-align: right;
+              font-size: 1.15rem;
+              margin: 8px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>Табель за неделю: ${mondayStr} – ${formatDate(sunday)}</h2>
+            ${name ? `<div class="subtitle">Сотрудник: ${name}</div>` : ''}
+            <table>
+              <thead>
+                <tr>
+                  <th>День</th>
+                  <th>Дата</th>
+                  <th>Начало</th>
+                  <th>Окончание</th>
+                  <th>Обед (мин)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+            <div class="summary">
+              <div>Часов: ${totalHours.toFixed(2).replace(/\.00$/, '')}</div>
+              <div>Заработано: ${totalSum.toFixed(2).replace(/\.00$/, '')} ₽</div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const exportWin = window.open('', '_blank');
+      exportWin.document.write(exportHtml);
+      exportWin.document.close();
+    }
+
+    // --- Аналитика ---
+    function showAnalytics() {
+      document.getElementById('main-page').style.display = 'none';
+      document.getElementById('analytics-page').style.display = 'block';
+    }
+
+    function showMain() {
+      document.getElementById('analytics-page').style.display = 'none';
+      document.getElementById('main-page').style.display = 'block';
+    }
+
+    document.addEventListener('DOMContentLoaded', renderTable);
+  </script>
+</body>
+</html>
